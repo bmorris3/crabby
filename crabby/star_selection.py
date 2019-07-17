@@ -9,7 +9,7 @@ from astropy.io import fits
 from photutils import CircularAperture
 from astroscrappy import detect_cosmics
 
-from astropy.convolution import convolve_fft, Tophat2DKernel
+from astropy.convolution import convolve_fft, Tophat2DKernel, Gaussian2DKernel
 from pyfftw.interfaces.scipy_fftpack import fft2, ifft2
 
 __all__ = ['init_centroids']
@@ -20,8 +20,8 @@ def init_centroids(first_image_path, master_flat, master_dark, target_centroid,
 
     first_image = (fits.getdata(first_image_path) - master_dark)/master_flat
 
-    tophat_kernel = Tophat2DKernel(55)
-    convolution = convolve_fft(first_image, tophat_kernel, fftn=fft2, ifftn=ifft2)
+    kernel = Gaussian2DKernel(5, 5)
+    convolution = convolve_fft(first_image, kernel, fftn=fft2, ifftn=ifft2)
 
     convolution -= np.median(convolution)
 
@@ -30,11 +30,11 @@ def init_centroids(first_image_path, master_flat, master_dark, target_centroid,
 
     convolution[convolution < -5*mad] = 0.0
 
-    from skimage.filters import threshold_otsu#, threshold_yen
+    from skimage.filters import threshold_otsu, threshold_yen
     from skimage.measure import label, regionprops
 
-    # thresh = threshold_yen(convolution)/4
-    thresh = threshold_otsu(image=convolution)/15 # Use 10 for 20171104, 15 for all other nights
+    thresh = threshold_yen(convolution)/4
+    # thresh = threshold_otsu(image=convolution) # Use 10 for 20171104, 15 for all other nights
 
     masked = np.ones_like(convolution)
     masked[convolution <= thresh] = 0
@@ -48,7 +48,7 @@ def init_centroids(first_image_path, master_flat, master_dark, target_centroid,
     regions = regionprops(label_image, convolution)
 
     # reject regions near to edge of detector
-    buffer_pixels = 50
+    buffer_pixels = 5
     regions = [region for region in regions
                if ((region.weighted_centroid[0] > buffer_pixels and
                    region.weighted_centroid[0] < label_image.shape[0] - buffer_pixels)
@@ -56,13 +56,13 @@ def init_centroids(first_image_path, master_flat, master_dark, target_centroid,
                     region.weighted_centroid[1] < label_image.shape[1] - buffer_pixels))]
 
     # TYC 3561-1538-1 is a delta Scuti variable. Remove it:
-    variable_star = [1790.1645248,  1153.91737674]
-    tol = 100
-    regions = [region for region in regions
-               if ((region.weighted_centroid[0] > variable_star[0] + tol) or
-                  (region.weighted_centroid[0] < variable_star[0] - tol)) and
-                  ((region.weighted_centroid[1] > variable_star[1] + tol) or
-                  (region.weighted_centroid[1] < variable_star[1] - tol))]
+    # variable_star = [1790.1645248,  1153.91737674]
+    # tol = 100
+    # regions = [region for region in regions
+    #            if ((region.weighted_centroid[0] > variable_star[0] + tol) or
+    #               (region.weighted_centroid[0] < variable_star[0] - tol)) and
+    #               ((region.weighted_centroid[1] > variable_star[1] + tol) or
+    #               (region.weighted_centroid[1] < variable_star[1] - tol))]
 
     centroids = np.array([region.weighted_centroid for region in regions])
     intensities = np.array([region.mean_intensity for region in regions])

@@ -27,7 +27,7 @@ def rebin_image(a, binning_factor):
 def photometry(image_paths, master_dark_path, master_flat_path, target_centroid,
                comparison_flux_threshold, aperture_radii,
                centroid_stamp_half_width, psf_stddev_init,
-               aperture_annulus_radius, output_path):
+               aperture_annulus_radius, output_path, star_positions):
     """
     Parameters
     ----------
@@ -58,12 +58,10 @@ def photometry(image_paths, master_dark_path, master_flat_path, target_centroid,
     master_dark = fits.getdata(master_dark_path)
     master_flat = fits.getdata(master_flat_path)
 
-    master_flat[master_flat < 0.1] = 1.0 # tmp
-
-    image_index = 101 # 0 for all days except 20171104 = 100
-    star_positions = init_centroids(image_paths[image_index], master_flat, master_dark,
-                                    target_centroid, plots=True,
-                                    min_flux=comparison_flux_threshold).T
+    image_index = 0
+    # star_positions = init_centroids(image_paths[image_index], master_flat, master_dark,
+    #                                 target_centroid, plots=True,
+    #                                 min_flux=comparison_flux_threshold).T
 
     # Initialize some empty arrays to fill with data:
     times = np.zeros(len(image_paths))
@@ -98,10 +96,10 @@ def photometry(image_paths, master_dark_path, master_flat_path, target_centroid,
             times[i] = Time(imageheader['DATE-OBS'], format='isot', scale='utc').jd
             medians[i] = np.median(imagedata)
             airmass[i] = imageheader['AIRMASS']
-            airpress[i] = imageheader['AIRPRESS']
+            # airpress[i] = imageheader['AIRPRESS']
             humidity[i] = imageheader['HUMIDITY']
-            telfocus[i] = imageheader['TELFOCUS']
-            altitude[i] = imageheader['TELALT']
+            # telfocus[i] = imageheader['TELFOCUS']
+            # altitude[i] = imageheader['TELALT']
 
             # Initial guess for each stellar centroid informed by previous centroid
             for j in range(len(star_positions)):
@@ -119,20 +117,21 @@ def photometry(image_paths, master_dark_path, master_flat_path, target_centroid,
                                         int(init_x) + centroid_stamp_half_width]
 
                 # Measure stellar centroid with 2D gaussian fit
-                x_stamp_centroid, y_stamp_centroid = centroid_com(image_stamp)
-                #x_stamp_centroid, y_stamp_centroid = centroid_1dg(image_stamp)
-                y_centroid = x_stamp_centroid + init_x - centroid_stamp_half_width
-                x_centroid = y_stamp_centroid + init_y - centroid_stamp_half_width
+                # x_stamp_centroid, y_stamp_centroid = centroid_com(image_stamp)
+                x_stamp_centroid, y_stamp_centroid = centroid_1dg(image_stamp)
+                x_centroid = x_stamp_centroid + init_x - centroid_stamp_half_width
+                y_centroid = y_stamp_centroid + init_y - centroid_stamp_half_width
 
-                xcentroids[i, j] = x_centroid
-                ycentroids[i, j] = y_centroid
+                ycentroids[i, j] = x_centroid
+                xcentroids[i, j] = y_centroid
 
-                # import matplotlib.pyplot as plt
-                # plt.figure()
-                # plt.imshow(np.log(image_stamp), origin='lower', cmap=plt.cm.viridis)
-                # plt.scatter(x_stamp_centroid, y_stamp_centroid, s=30)
-                # plt.show()
-                #
+                # if i > 30:
+                #     import matplotlib.pyplot as plt
+                #     plt.figure()
+                #     plt.imshow(np.log(image_stamp), origin='lower', cmap=plt.cm.viridis)
+                #     plt.scatter(x_stamp_centroid, y_stamp_centroid, s=30)
+                #     plt.show()
+
                 # plt.figure()
                 # s = np.std(imagedata)
                 # m = np.median(imagedata)
@@ -155,7 +154,7 @@ def photometry(image_paths, master_dark_path, master_flat_path, target_centroid,
                     psf_stddev[i] = 0.5*(best_psf_model.x_stddev.value +
                                           best_psf_model.y_stddev.value)
 
-            positions = np.vstack([ycentroids[i, :], xcentroids[i, :]])
+            positions = np.vstack([ycentroids[i, :], xcentroids[i, :]]).T
 
             for k, aperture_radius in enumerate(aperture_radii):
                 target_apertures = CircularAperture(positions, aperture_radius)
@@ -164,16 +163,22 @@ def photometry(image_paths, master_dark_path, master_flat_path, target_centroid,
                                                          aperture_annulus_radius,
                                                     r_out=aperture_radius +
                                                           2 * aperture_annulus_radius)
-                flux_in_annuli = aperture_photometry(imagedata,
-                                                     background_annuli)['aperture_sum'].data
-                background = flux_in_annuli/background_annuli.area()
+                # flux_in_annuli = aperture_photometry(imagedata,
+                #                                      background_annuli)['aperture_sum'].data
+                # background = flux_in_annuli/background_annuli.area()
                 flux = aperture_photometry(imagedata,
                                            target_apertures)['aperture_sum'].data
-                background_subtracted_flux = (flux - background *
-                                              target_apertures.area())
-
+                # background_subtracted_flux = (flux - background *
+                #                               target_apertures.area())
+                background_subtracted_flux = flux
                 fluxes[i, :, k] = background_subtracted_flux/exposure_duration
                 errors[i, :, k] = np.sqrt(flux)
+
+                # import matplotlib.pyplot as plt
+                # plt.imshow(imagedata, vmin=0, vmax=100, origin='lower')
+                # target_apertures.plot(color='w')
+                # background_annuli.plot(color='w')
+                # plt.show()
 
     ## Save some values
     results = PhotometryResults(times, fluxes, errors, xcentroids, ycentroids,

@@ -29,7 +29,7 @@ def generate_master_dark(dark_paths, master_dark_path):
         allflatdarks[:, :, i] = fits.getdata(darkpath)
     masterflatdark = np.median(allflatdarks, axis=2)
 
-    fits.writeto(master_dark_path, masterflatdark, clobber=True)
+    fits.writeto(master_dark_path, masterflatdark, overwrite=True)
 
 def generate_master_flat_and_dark(flat_paths, dark_paths, master_flat_path,
                                   master_dark_path):
@@ -57,7 +57,7 @@ def generate_master_flat_and_dark(flat_paths, dark_paths, master_flat_path,
         allflatdarks[:, :, i] = fits.getdata(darkpath)
     masterflatdark = np.median(allflatdarks, axis=2)
 
-    fits.writeto(master_dark_path, masterflatdark, clobber=True)
+    fits.writeto(master_dark_path, masterflatdark, overwrite=True)
 
     # Make master flat field:
     testdata = fits.getdata(flat_paths[0])
@@ -120,7 +120,7 @@ def generate_master_flat_and_dark(flat_paths, dark_paths, master_flat_path,
     #
     # #np.save('coefficients.npy', coefficients)
     # master_flat = coefficients/np.median(coefficients[coefficients != 1])
-    fits.writeto(master_flat_path, master_flat, clobber=True)
+    fits.writeto(master_flat_path, master_flat, overwrite=True)
 
 
 def test_flat(image_path, master_flat_path, master_dark_path):
